@@ -96,6 +96,98 @@ function _ensureIsAPIResult(result: any): APIResult {
   return result;
 }
 
+/**
+ * Following the format of tecken v5 API request
+ */
+function getSymbolRequest(requests: LibSymbolicationRequest[]) {
+  const addressArrays = requests.map(({ addresses }) => Array.from(addresses));
+  const symbolRequest = {
+    memoryMap: requests.map(({ lib: { debugName, breakpadId } }) => [
+      debugName,
+      breakpadId,
+    ]),
+    stacks: addressArrays.map((addressArray, libIndex) =>
+      addressArray.map(addr => [libIndex, addr])
+    ),
+  };
+  return symbolRequest;
+}
+
+/**
+ * 
+ */
+async function verifyResponseParam(addressArrays, jsonPromise: Promise<any>, request: LibSymbolicationRequest, libIndex: Number) {
+  const { lib } = request;
+    const { debugName, breakpadId } = lib;
+    let json;
+    try {
+      json = _ensureIsAPIResult(await jsonPromise).results[0];
+    } catch (error) {
+      throw new SymbolsNotFoundError(
+        'There was a problem with the JSON returned by the local symbolication API.',
+        lib,
+        error
+      );
+    }
+
+    if (!json.found_modules[`${debugName}/${breakpadId}`]) {
+      throw new SymbolsNotFoundError(
+        `The local symbol server does not have symbols for ${debugName}/${breakpadId}.`,
+        lib
+      );
+    }
+    const addressInfo = json.stacks[libIndex];
+    const addressArray = addressArrays[libIndex];
+    if (addressInfo.length !== addressArray.length) {
+      throw new SymbolsNotFoundError(
+        `The result from the symbol server has an unexpected length: Expecting ${addressArray.length} but found ${addressInfo.length}`,
+        lib
+      );
+    }
+
+    if (addressInfo === undefined) {
+      throw new SymbolsNotFoundError(
+        `The result from the symbol server did not contain function information for stacks at ${libIndex}, even though found_modules was true for the library that this address belongs to`,
+        lib
+      );
+    }
+    
+    return {addressInfo, addressArray};
+}
+
+// Read the binary files locally and get its symbolication in a JSON object
+// Depending on the URL, the result can be of eitehr v6 or v5,
+export function requestSymbolsLocally(
+  requests: LibSymbolicationRequest[],
+  geckoProfiler?: $GeckoProfiler,
+  url: String,
+): Array<Promise<Map<number, AddressResult>>> {
+  const addressArrays = requests.map(({ addresses }) => Array.from(addresses));
+  let jsonPromise = geckoProfiler.getLocalSymbolication(getSymbolRequest(requests), url);  
+  
+  return requests.map(async function(request, libIndex) {
+    const {addressInfo, addressArray} = await verifyResponseParam(addressArrays, jsonPromise, request, libIndex);
+
+    const results = new Map();
+    for (let i = 0; i < addressInfo.length; i++) {
+      const address = addressArray[i];
+      const info = addressInfo[i];
+      if (info.function !== undefined && info.function_offset !== undefined) {
+        results.set(address, {
+          name: info.function,
+          functionOffset: parseInt(info.function_offset.substr(2), 16),
+        });
+      } else {
+        throw new SymbolsNotFoundError(
+          `The result from the symbol server did not contain function information for address ${address}, even though found_modules was true for the library that this address belongs to`,
+          lib
+        );
+      }
+    }
+    return results;
+  });
+}
+
 // Request symbols for the given addresses and libraries using the Mozilla
 // symbolication API.
 // Returns an array of promises, one promise per LibSymbolicationRequest in
@@ -133,7 +225,7 @@ export function requestSymbols(
       json = _ensureIsAPIResult(await jsonPromise).results[0];
     } catch (error) {
       throw new SymbolsNotFoundError(
-        'There was a problem with the JSON returned by the symbolication API.',
+        `There was a problem with the JSON returned by the symbolication API. Specifically, ${error.error_type}`,
         lib,
         error
       );
@@ -151,6 +243,13 @@ export function requestSymbols(
     if (addressInfo.length !== addressArray.length) {
       throw new SymbolsNotFoundError(
         'The result from the symbol server has an unexpected length.',
+        lib
+      );
+    }
+
+    if (!addressInfo || !addressArray) {
+      throw new SymbolsNotFoundError(
+        `The result from the symbol server did not contain function information for address ${address}, even though found_modules was true for the library that this address belongs to`,
         lib
       );
     }

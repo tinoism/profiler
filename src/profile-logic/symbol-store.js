@@ -30,6 +30,7 @@ interface SymbolProvider {
 
   // Expensive, should be called if requestSymbolsFromServer was unsuccessful.
   requestSymbolTableFromAddon(lib: RequestedLib): Promise<SymbolTableAsTuple>;
+  requestSymbolFromLocal(request: LibSymbolicationRequest[], url: String): Promise<Map<number, AddressResult>>[];
 }
 
 export interface AbstractSymbolStore {
@@ -128,7 +129,7 @@ export class SymbolStore {
     return this._db
       .storeSymbolTable(lib.debugName, lib.breakpadId, symbolTable)
       .catch(error => {
-        console.log(
+        console.error(
           `Failed to store the symbol table for ${
             lib.debugName
           } in the database:`,
@@ -278,103 +279,95 @@ export class SymbolStore {
       10000,
       ({ addresses }) => addresses.size
     );
-
-    // Kick off the requests to the symbolication API, and create a flattened
-    // list of promises, one promise per library. Even for libraries that are
-    // handled within the same request to the symbolication API, each library's
-    // promise can fail independently if the symbol server does not have symbols
-    // for this library.
-    const libraryPromiseChunks = chunks.map(requests =>
-      this._symbolProvider
-        .requestSymbolsFromServer(requests)
-        .map((resultsPromise, i) => ({
-          request: requests[i],
-          resultsPromise,
-        }))
-    );
-
-    const libraryPromises = [].concat(...libraryPromiseChunks);
-
-    // Finalize requests for which option 1 was successful:
-    // Now that the requests to the server have been kicked off, process
-    // symbolication for the libraries for which we found symbol tables in the
-    // database. This is delayed until after the request has been kicked off
-    // because it can take some time.
-
-    // We also need a demangling function for this, which is in an async module.
-    const demangleCallback = await _getDemangleCallback();
-
-    for (const { request, symbolTable } of requestsForCachedLibs) {
-      successCb(
-        request,
-        this._readSymbolsFromSymbolTable(
-          request.addresses,
-          symbolTable,
-          demangleCallback
-        )
+      
+    // For development mode (local firefox build), the server will automatically direct 
+    // to reading the binary files locally (bypassing calling Tecken to retreive it because
+    // server most likely won't have such information due to unmatched breakpadID)
+    if (process.env.NODE_ENV === 'development') {
+      // Kick off the requests to the local symbolication API. 
+      const localSymbolicatePromiseChunks = chunks.map(requests =>
+        this._symbolProvider
+          .requestSymbolFromLocal(requests, 'symbolicate/v5')   // TODO: change to v6 later and be able to get inline frames
+          .map((resultsPromise, i) => ({
+            request: requests[i],
+            resultsPromise,
+          }))
       );
-    }
 
-    // Process the results from the symbolication API request, as they arrive.
-    // For each library that was not successfully symbolicated, fall back to
-    // requesting a whole symbol table from the add-on. The add-on will attempt
-    // to dump symbols from the binary.
-    await Promise.all(
-      libraryPromises.map(async ({ request, resultsPromise }) => {
+      const localSymbolicatePromises = [].concat(...localSymbolicatePromiseChunks);
+
+      await Promise.all(localSymbolicatePromises.map(async ({ request, resultsPromise }) => {
         try {
           // Await the results for this library. This call will throw if the
           // symbol server did not have symbol information for this library.
           const results = await resultsPromise;
-
-          // Did not throw, option 2 was successful!
           successCb(request, results);
-        } catch (error) {
-          // The symbolication API did not have any symbols for this library,
-          // or an error occurred when parsing the results. We want to continue
-          // to search for symbol information from other sources in both cases,
-          // so we swallow the error and keep going. But in order to catch
-          // problems with the API we should still log these errors.
-          console.log(
-            `The symbolication API request was not successful for ${
+        }
+        catch (error) {
+          console.error(
+            `The local symbolication API request was not successful for ${
               request.lib.debugName
             }/${request.lib.breakpadId}:`,
             error
           );
+          errorCb(
+            request,
+            new SymbolsNotFoundError(
+              `Failed to symbolicate library ${request.lib.debugName}`,
+              request.lib,
+              error
+            )
+          );
+        }
+      }));
+    } else if (process.env.NODE_ENV === 'production') {
+      // Kick off the requests to the symbolication API, and create a flattened
+      // list of promises, one promise per library. Even for libraries that are
+      // handled within the same request to the symbolication API, each library's
+      // promise can fail independently if the symbol server does not have symbols
+      // for this library.
+      const libraryPromiseChunks = chunks.map(requests =>
+        this._symbolProvider
+          .requestSymbolsFromServer(requests)
+          .map((resultsPromise, i) => ({
+            request: requests[i],
+            resultsPromise,
+          }))
+      );
 
-          const { lib, addresses } = request;
+      const libraryPromises = [].concat(...libraryPromiseChunks);
+
+      // We also need a demangling function for this, which is in an async module.
+      const demangleCallback = await _getDemangleCallback();
+
+      await Promise.all(
+        libraryPromises.map(async ({ request, resultsPromise }) => {
           try {
-            // Option 3: Request a symbol table from the add-on.
-            // This call will throw if the add-on cannot obtain the symbol table.
-            const symbolTable = await this._symbolProvider.requestSymbolTableFromAddon(
-              lib
+            // Await the results for this library. This call will throw if the
+            // symbol server did not have symbol information for this library.
+            const results = await resultsPromise;
+            successCb(request, results);
+          }
+          catch (error) {
+            console.error(
+              `The symbolication API request was not successful for ${
+                request.lib.debugName
+              }/${request.lib.breakpadId}:`,
+              error
             );
-
-            // Did not throw, option 3 was successful!
-            successCb(
-              request,
-              this._readSymbolsFromSymbolTable(
-                addresses,
-                symbolTable,
-                demangleCallback
-              )
-            );
-
-            // Store the symbol table in the database.
-            await this._storeSymbolTableInDB(lib, symbolTable);
-          } catch (error) {
-            // None of the symbolication methods were successful.
-            // Call the error callback.
             errorCb(
               request,
               new SymbolsNotFoundError(
-                `Failed to symbolicate library ${lib.debugName}`,
-                lib,
+                `Failed to symbolicate library ${request.lib.debugName}`,
+                request.lib,
                 error
               )
             );
           }
-        }
-      })
-    );
+        })
+      );
+    } else {
+      throw Error("process.env.NODE_ENV is not set: must be either 'development' or 'production'.")
+    }
   }
 }

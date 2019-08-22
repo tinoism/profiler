@@ -9,7 +9,7 @@ import {
   processProfile,
   unserializeProfileOfArbitraryFormat,
 } from '../profile-logic/process-profile';
-import { SymbolStore } from '../profile-logic/symbol-store';
+import { SymbolStore} from '../profile-logic/symbol-store';
 import { symbolicateProfile } from '../profile-logic/symbolication';
 import * as MozillaSymbolicationAPI from '../profile-logic/mozilla-symbolication-api';
 import { mergeProfiles } from '../profile-logic/comparison';
@@ -273,9 +273,23 @@ export function requestingSymbolTable(requestedLib: RequestedLib): Action {
   };
 }
 
+export function requestingLocalSymbolication(requestedLib: RequestedLib): Action {
+  return {
+    type: 'REQUESTING_LOCAL_SYMBOLICATION',
+    requestedLib,
+  };
+}
+
 export function receivedSymbolTableReply(requestedLib: RequestedLib): Action {
   return {
     type: 'RECEIVED_SYMBOL_TABLE_REPLY',
+    requestedLib,
+  };
+}
+
+export function receivedLocalSymbolicationReply(requestedLib: RequestedLib): Action {
+  return {
+    type: 'RECEIVED_LOCAL_SYMBOLICATION_REPLY',
     requestedLib,
   };
 }
@@ -501,6 +515,27 @@ function getSymbolStore(
         dispatch(receivedSymbolTableReply(lib));
         throw error;
       }
+    },
+    requestSymbolFromLocal: (requests, url) => {
+      if (!geckoProfiler) {
+        throw new Error("There's no connection to the gecko profiler add-on.");
+      }
+      for (const { lib } of requests) {
+        dispatch(requestingLocalSymbolication(lib));
+      }
+      let symbolicateResponse = MozillaSymbolicationAPI.requestSymbolsLocally(requests, geckoProfiler, url);
+      return symbolicateResponse.map(
+        async (libPromise, i) => {
+          try {
+            const result = libPromise;
+            dispatch(receivedLocalSymbolicationReply(requests[i].lib));
+            return result;
+          } catch (error) {
+            dispatch(receivedLocalSymbolicationReply(requests[i].lib));
+            throw error;
+          }
+        }
+      );
     },
   });
 
