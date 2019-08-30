@@ -30,7 +30,11 @@ interface SymbolProvider {
 
   // Expensive, should be called if requestSymbolsFromServer was unsuccessful.
   requestSymbolTableFromAddon(lib: RequestedLib): Promise<SymbolTableAsTuple>;
+<<<<<<< HEAD
   requestSymbolFromLocal(request: LibSymbolicationRequest[], url: String): Promise<Map<number, AddressResult>>[];
+=======
+  requestSymbolFromLocal(request: LibSymbolicationRequest[], url: string): Promise<Map<number, AddressResult>>[];
+>>>>>>> WIP: trying to integrate local symbolication API
 }
 
 export interface AbstractSymbolStore {
@@ -359,13 +363,37 @@ export class SymbolStore {
 =======
           const { lib, addresses } = request;
           try {
-            await this._getSymbolTable(
-              request,
-              lib,
-              addresses,
-              demangleCallback,
-              successCb
+            let resultsPromise = this._symbolProvider.requestSymbolFromLocal([request], 'symbolicate/v5')[0];
+            const result = await resultsPromise;
+            console.log("results from request", request, result);
+            successCb(request, result);
+            // let localSymbolicatePromises = this._symbolProvider
+            // .requestSymbolFromLocal([request], 'symbolicate/v5')   // TODO: change to v6 later and be able to get inline frames
+            // .map((resultsPromise, _) => ({
+            //   request: request,
+            //   resultsPromise,
+            // }));
+            // localSymbolicatePromises.map(async ({ request, resultsPromise }) => {
+            //  // Await the results for this library. This call will throw if the
+            //     // symbol server did not have symbol information for this library.
+            //     const results = await resultsPromise;
+            //     successCb(request, results);
+            // });
+            // console.log(`Now trying local symbolication API...`);
+            // console.log(`The local symbolication API request was successful for ${
+            //   request.lib.debugName
+            // }/${request.lib.breakpadId}:`)
+            // successCb(request, results);
+          } 
+          
+          catch (error) {
+            console.error(
+              `The local symbolication API request was not successful for ${
+                request.lib.debugName
+              }/${request.lib.breakpadId}:`,
+              error
             );
+<<<<<<< HEAD
           } catch (error) {
             // None of the symbolication methods were successful.
             // Call the error callback.
@@ -384,6 +412,34 @@ export class SymbolStore {
     } else {
       throw Error("process.env.NODE_ENV is not set: must be either 'development' or 'production'.")
     }
+=======
+            
+            try {
+              console.log(`Now trying local _getSymbolTable...`);
+              await this._getSymbolTable(
+                request,
+                lib,
+                addresses,
+                demangleCallback,
+                successCb
+              );
+            } catch (error) {
+              // None of the symbolication methods were successful.
+              // Call the error callback.
+              errorCb(
+                request,
+                new SymbolsNotFoundError(
+                  `Failed to symbolicate library ${lib.debugName}`,
+                  lib,
+                  error
+                )
+              );
+            }
+          }
+        }
+      })
+    )
+>>>>>>> WIP: trying to integrate local symbolication API
   }
 
   async _getSymbolTable(

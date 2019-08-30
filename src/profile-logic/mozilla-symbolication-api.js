@@ -175,6 +175,7 @@ async function verifyResponseParam(
   }
 
   if (!json.found_modules[`${debugName}/${breakpadId}`]) {
+    console.log({json,debugName,breakpadId});
     throw new SymbolsNotFoundError(
       `The local symbol server does not have symbols for ${debugName}/${breakpadId}.`,
       lib
@@ -221,6 +222,7 @@ export function requestSymbolsLocally(
   url: string
 ): Array<Promise<Map<number, AddressResult>>> {
   const addressArrays = requests.map(({ addresses }) => Array.from(addresses));
+  console.log('requesting things from local API', addressArrays, requests, getSymbolRequest(requests));
   const jsonPromise = geckoProfiler.getLocalSymbolication(
     getSymbolRequest(requests),
     url
