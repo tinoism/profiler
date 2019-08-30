@@ -76,6 +76,8 @@ describe('doSymbolicateProfile', function() {
             lib
           );
         },
+        requestSymbolFromLocal: (requests, _) =>
+          requests.map(() => Promise.reject(new Error(''))),
       }),
     };
   }

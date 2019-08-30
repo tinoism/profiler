@@ -51,6 +51,9 @@ describe('UrlManager', function() {
       getSymbolTable: jest
         .fn()
         .mockRejectedValue(new Error('No symbol tables available')),
+      getLocalSymbolication: jest
+        .fn()
+        .mockRejectedValue(new Error('No local symbols available')),
     };
     window.fetch = jest
       .fn()

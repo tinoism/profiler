@@ -63,6 +63,14 @@ describe('SymbolStore', function() {
       requestSymbolTableFromAddon: jest.fn(() =>
         Promise.resolve(exampleSymbolTable)
       ),
+      requestSymbolFromLocal: jest.fn((requests, _) =>
+        requests.map(request => {
+          expect(request.lib.breakpadId).not.toBe('');
+          return Promise.reject(
+            new Error('this example only supports symbol tables')
+          );
+        })
+      ),
     };
     symbolStore = new SymbolStore('profiler-async-storage', symbolProvider);
 
@@ -133,6 +141,11 @@ describe('SymbolStore', function() {
       requestSymbolTableFromAddon: jest.fn(() =>
         Promise.resolve(exampleSymbolTable)
       ),
+      requestSymbolFromLocal: jest.fn((requests, _) =>
+        requests.map(() =>
+          Promise.reject(new Error('this example only supports symbol tables'))
+        )
+      ),
     };
     symbolStore = new SymbolStore('profiler-async-storage', symbolProvider);
 
@@ -192,6 +205,19 @@ describe('SymbolStore', function() {
       requestSymbolTableFromAddon: jest
         .fn()
         .mockResolvedValue(exampleSymbolTable),
+      requestSymbolFromLocal: jest.fn((requests, _) => {
+        symbolsForAddressesRequestCount += requests.length;
+        return requests.map(
+          request =>
+            new Promise((resolve, reject) => {
+              fakeSymbolStore.getSymbols(
+                [request],
+                (_request, results) => resolve(results),
+                (_request, error) => reject(error)
+              );
+            })
+        );
+      }),
     };
     symbolStore = new SymbolStore('profiler-async-storage', symbolProvider);
 

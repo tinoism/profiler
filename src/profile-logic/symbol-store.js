@@ -335,6 +335,7 @@ export class SymbolStore {
           }))
       );
 
+<<<<<<< HEAD
       const libraryPromises = [].concat(...libraryPromiseChunks);
 
       // We also need a demangling function for this, which is in an async module.
@@ -355,6 +356,20 @@ export class SymbolStore {
               }/${request.lib.breakpadId}:`,
               error
             );
+=======
+          const { lib, addresses } = request;
+          try {
+            await this._getSymbolTable(
+              request,
+              lib,
+              addresses,
+              demangleCallback,
+              successCb
+            );
+          } catch (error) {
+            // None of the symbolication methods were successful.
+            // Call the error callback.
+>>>>>>> refactored _getSymbolTable
             errorCb(
               request,
               new SymbolsNotFoundError(
@@ -369,5 +384,28 @@ export class SymbolStore {
     } else {
       throw Error("process.env.NODE_ENV is not set: must be either 'development' or 'production'.")
     }
+  }
+
+  async _getSymbolTable(
+    request: LibSymbolicationRequest,
+    lib: RequestedLib,
+    addresses: Set<number>,
+    demangleCallback: string => string,
+    successCb: (LibSymbolicationRequest, Map<number, AddressResult>) => void
+  ): Promise<void> {
+    // Option 3: Request a symbol table from the add-on.
+    // This call will throw if the add-on cannot obtain the symbol table.
+    const symbolTable = await this._symbolProvider.requestSymbolTableFromAddon(
+      lib
+    );
+
+    // Did not throw, option 3 was successful!
+    successCb(
+      request,
+      this._readSymbolsFromSymbolTable(addresses, symbolTable, demangleCallback)
+    );
+
+    // Store the symbol table in the database.
+    await this._storeSymbolTableInDB(lib, symbolTable);
   }
 }

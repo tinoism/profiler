@@ -259,7 +259,12 @@ type ReceiveProfileAction =
   | {| +type: 'RETURN_TO_ZIP_FILE_LIST' |}
   | {| +type: 'FILE_NOT_FOUND_IN_ZIP_FILE', +pathInZipFile: string |}
   | {| +type: 'REQUESTING_SYMBOL_TABLE', +requestedLib: RequestedLib |}
+  | {| +type: 'REQUESTING_LOCAL_SYMBOLICATION', +requestedLib: RequestedLib |}
   | {| +type: 'RECEIVED_SYMBOL_TABLE_REPLY', +requestedLib: RequestedLib |}
+  | {|
+      +type: 'RECEIVED_LOCAL_SYMBOLICATION_REPLY',
+      +requestedLib: RequestedLib,
+    |}
   | {| +type: 'START_SYMBOLICATING' |}
   | {| +type: 'WAITING_FOR_PROFILE_FROM_ADDON' |}
   | {| +type: 'WAITING_FOR_PROFILE_FROM_STORE' |}

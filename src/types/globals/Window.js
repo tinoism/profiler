@@ -15,7 +15,7 @@ declare type $GeckoProfiler = {
     debugName: string,
     breakpadId: string
   ) => Promise<SymbolTableAsTuple>,
-  getLocalSymbolication: (Object) => Promise<Object>,
+  getLocalSymbolication: (request: Object, url: _) => Promise<Object>,
 };
 
 declare class Window extends EventTarget {

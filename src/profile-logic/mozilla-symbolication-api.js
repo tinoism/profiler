@@ -113,6 +113,7 @@ function getSymbolRequest(requests: LibSymbolicationRequest[]) {
   return symbolRequest;
 }
 
+<<<<<<< HEAD
 /**
  * 
  */
@@ -153,12 +154,59 @@ async function verifyResponseParam(addressArrays, jsonPromise: Promise<any>, req
     }
     
     return {addressInfo, addressArray};
+=======
+async function verifyResponseParam(
+  addressArrays,
+  jsonPromise: Promise<any>,
+  request: LibSymbolicationRequest,
+  libIndex: number
+) {
+  const { lib } = request;
+  const { debugName, breakpadId } = lib;
+  let json;
+  try {
+    json = _ensureIsAPIResult(await jsonPromise).results[0];
+  } catch (error) {
+    throw new SymbolsNotFoundError(
+      'There was a problem with the JSON returned by the local symbolication API.',
+      lib,
+      error
+    );
+  }
+
+  if (!json.found_modules[`${debugName}/${breakpadId}`]) {
+    throw new SymbolsNotFoundError(
+      `The local symbol server does not have symbols for ${debugName}/${breakpadId}.`,
+      lib
+    );
+  }
+  const addressInfo = json.stacks[libIndex];
+  const addressArray = addressArrays[libIndex];
+  if (addressInfo.length !== addressArray.length) {
+    throw new SymbolsNotFoundError(
+      `The result from the symbol server has an unexpected length: Expecting ${
+        addressArray.length
+      } but found ${addressInfo.length}`,
+      lib
+    );
+  }
+
+  if (addressInfo === undefined) {
+    throw new SymbolsNotFoundError(
+      `The result from the symbol server did not contain function information for stacks at ${libIndex}, even though found_modules was true for the library that this address belongs to`,
+      lib
+    );
+  }
+
+  return { addressInfo, addressArray };
+>>>>>>> refactored _getSymbolTable
 }
 
 // Read the binary files locally and get its symbolication in a JSON object
 // Depending on the URL, the result can be of eitehr v6 or v5,
 export function requestSymbolsLocally(
   requests: LibSymbolicationRequest[],
+<<<<<<< HEAD
   geckoProfiler?: $GeckoProfiler,
   url: String,
 ): Array<Promise<Map<number, AddressResult>>> {
@@ -168,6 +216,25 @@ export function requestSymbolsLocally(
   return requests.map(async function(request, libIndex) {
     const {addressInfo, addressArray} = await verifyResponseParam(addressArrays, jsonPromise, request, libIndex);
 
+=======
+  geckoProfiler: $GeckoProfiler,
+  url: string
+): Array<Promise<Map<number, AddressResult>>> {
+  const addressArrays = requests.map(({ addresses }) => Array.from(addresses));
+  const jsonPromise = geckoProfiler.getLocalSymbolication(
+    getSymbolRequest(requests),
+    url
+  );
+
+  return requests.map(async function(request, libIndex) {
+    const { addressInfo, addressArray } = await verifyResponseParam(
+      addressArrays,
+      jsonPromise,
+      request,
+      libIndex
+    );
+    const { lib } = request;
+>>>>>>> refactored _getSymbolTable
     const results = new Map();
     for (let i = 0; i < addressInfo.length; i++) {
       const address = addressArray[i];
@@ -225,7 +292,13 @@ export function requestSymbols(
       json = _ensureIsAPIResult(await jsonPromise).results[0];
     } catch (error) {
       throw new SymbolsNotFoundError(
+<<<<<<< HEAD
         `There was a problem with the JSON returned by the symbolication API. Specifically, ${error.error_type}`,
+=======
+        `There was a problem with the JSON returned by the symbolication API. Specifically, ${
+          error.error_type
+        }`,
+>>>>>>> refactored _getSymbolTable
         lib,
         error
       );
@@ -249,7 +322,11 @@ export function requestSymbols(
 
     if (!addressInfo || !addressArray) {
       throw new SymbolsNotFoundError(
+<<<<<<< HEAD
         `The result from the symbol server did not contain function information for address ${address}, even though found_modules was true for the library that this address belongs to`,
+=======
+        `The result from the symbol server did not contain function information for ${debugName}, even though found_modules was true for the library that this address belongs to`,
+>>>>>>> refactored _getSymbolTable
         lib
       );
     }

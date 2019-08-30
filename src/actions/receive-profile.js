@@ -273,7 +273,13 @@ export function requestingSymbolTable(requestedLib: RequestedLib): Action {
   };
 }
 
+<<<<<<< HEAD
 export function requestingLocalSymbolication(requestedLib: RequestedLib): Action {
+=======
+export function requestingLocalSymbolication(
+  requestedLib: RequestedLib
+): Action {
+>>>>>>> refactored _getSymbolTable
   return {
     type: 'REQUESTING_LOCAL_SYMBOLICATION',
     requestedLib,
@@ -287,7 +293,13 @@ export function receivedSymbolTableReply(requestedLib: RequestedLib): Action {
   };
 }
 
+<<<<<<< HEAD
 export function receivedLocalSymbolicationReply(requestedLib: RequestedLib): Action {
+=======
+export function receivedLocalSymbolicationReply(
+  requestedLib: RequestedLib
+): Action {
+>>>>>>> refactored _getSymbolTable
   return {
     type: 'RECEIVED_LOCAL_SYMBOLICATION_REPLY',
     requestedLib,
@@ -523,6 +535,7 @@ function getSymbolStore(
       for (const { lib } of requests) {
         dispatch(requestingLocalSymbolication(lib));
       }
+<<<<<<< HEAD
       let symbolicateResponse = MozillaSymbolicationAPI.requestSymbolsLocally(requests, geckoProfiler, url);
       return symbolicateResponse.map(
         async (libPromise, i) => {
@@ -536,6 +549,23 @@ function getSymbolStore(
           }
         }
       );
+=======
+      const symbolicateResponse = MozillaSymbolicationAPI.requestSymbolsLocally(
+        requests,
+        geckoProfiler,
+        url
+      );
+      return symbolicateResponse.map(async (libPromise, i) => {
+        try {
+          const result = libPromise;
+          dispatch(receivedLocalSymbolicationReply(requests[i].lib));
+          return result;
+        } catch (error) {
+          dispatch(receivedLocalSymbolicationReply(requests[i].lib));
+          throw error;
+        }
+      });
+>>>>>>> refactored _getSymbolTable
     },
   });
 

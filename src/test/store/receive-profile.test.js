@@ -379,6 +379,9 @@ describe('actions/receive-profile', function() {
         getSymbolTable: jest
           .fn()
           .mockRejectedValue(new Error('No symbol tables available')),
+        getLocalSymbolication: jest
+          .fn()
+          .mockRejectedValue(new Error('No symbol tables available')),
       };
       window.fetch = jest
         .fn()
@@ -1449,6 +1452,7 @@ describe('actions/receive-profile', function() {
         getSymbolTable: jest
           .fn()
           .mockRejectedValue(new Error('No symbol tables available')),
+        getLocalSymbolication: jest.fn().mockResolvedValue(geckoProfile),
       };
       window.geckoProfilerPromise = Promise.resolve(geckoProfiler);
 
